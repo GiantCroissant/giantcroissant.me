@@ -1,0 +1,37 @@
+---
+title: 規劃目錄結構和選擇適合的IDE
+date: 2017-06-24
+categories:
+  - roll-a-ball-series
+tags:
+  - unity
+  - fsharp
+---
+
+Unity專案產生後，會在其根目錄下放置二個重要的目錄-Assets和ProjectSettings，外加一個可以被移除但存放Dll的Library檔。這個目錄結構對多數Unity開發者並不陌生。在產生任一程式碼的當下，則Unity會額外的產生sln檔和數個csproj檔在和Assets等目錄同層的地方。csproj檔就是在編輯器中（VS、VS Code等）註明有多少檔案要被編譯、建置的設定檔。
+
+在Unity中若要用F#開發，是一定要先建置成Dll後再進行引用。因此，必需要先產生可以建置Dll檔的專案環境。sln檔不是必需的，但用sln檔來組織專案檔是比較方便的方式。也就是為什麼在Unity自行產生的專案檔都會伴隨著sln檔。csproj檔明確的指出是用C#開發的專案，如果用F#則必需要產生fsproj檔。
+
+雖然可以只產生一個fsproj檔，並額外的加入到Unity已產生好的sln檔中，但麻煩的是每一次有變動（符合某些規則）時，Unity會重新產生csproj檔和sln檔。所以任何對其sln檔的變動都會重置。若是自行加載fsproj到sln檔，則些記錄會整份還原，也就是說每一次sln檔重新生成後都必需要額外的加載fsproj檔進來，很不方便的。
+
+所以最佳的方式是自行產生一個sln檔並置於它處，再將fsproj檔掛載進來。一方面維持Unity產生的專案，一方面置入自行產生的專案，以此想法進行並調整目錄結構後，則會像是
+
+- roll-a-ball
+	- unity-project
+		- main.sln
+	- lib-project
+		- main.sln
+
+而每次建置出來的Dll檔，則會放入到unity-project/Assets裡的Plugins目錄，但是不是直接在Assets下那一層到無所謂，就算是隔了好幾層的Plugins目錄也可。
+
+目錄的配置大略有想法後，接下來就是要稍微談一下Unity的版本和Mono版本。除了某個5.6的Beta版有提供支援到.Net 4.x版外，其它5.6版和以下的版本都只支援.Net 2.0 （也就是3.5）的框架。雖然F#某些版本也可跑在.Net 3.5版，但一來這個版本（F# 3.0版，3.1版之後就一定要到.Net 4.x了）很舊不好找，二來功能F#新版加了不少功能，也較多的資料，從學習的觀點來看，了解新的版本較佳。
+
+因此，若是要用新版的F#，只能跑在.Net 4.x版上，Unity 2017自然就成為了唯一的選擇。雖然Unity 2017目前仍在Beta中，但每個build都支援.Net 4.6環境，對於開發的環境設定上是單純的。
+
+而IDE的選擇，在Windows上毫無疑問的一定是用Visual Studio，不論它多肥大多為人詬病，它仍是在Windows上開發C#和F#最棒的IDE。而在Mac上，一直都沒有太優秀的C#或是F#的IDE。從Mono Develop到Xamarin studio到現在的Visual Studio for Mac，用起來都沒有Windows上的Visual Studio來的順手。而Visual Studio的簡易版-Visual Studio Code在開發C#算是不錯的選擇，藉由[Ionide](http://ionide.io)這套VSC的擴充，讓開發F#的體驗變的更好。
+
+這個情況終於在2016年底有些改變了。**自從JetBrains推出了Project Rider後，在Mac上開發C#專案最佳的IDE就非它莫屬了**。JetBrains推出的IDE，像是Intellij、Web Storm等都是好用且難以在功能面上挑惕的（價位上就有多元的觀點），而承襲著其盛名和技術的Project Rider從2016年底出現後，從原先沒有支援Unity環境到支援，從不預計會加入F#開發環境到現在已將基本的F#開發功能導入，Project Rider 偃然成為在Mac上開發C#和F#的首選（自身的首選）。
+
+工欲善其事，必先利其器，這是必然的，但是否會是相同的選擇則不一定。但在開發F#時，若是有自動補完、語法高光亮顯示等，一定是比較輕鬆的。尤其是對於有Type inference的語言來說，有時候IDE裡提示什麼型別是很有助益的。所以不論VS(Code)也好、Xamarin Studio也好、Project Rider也好，都是前期切入F#的重要工具。
+
+選定了可以開發F#專案的IDE，也規劃好了和Unity專案接合時的目錄結構，接下來就是開始要著手進行實際替換形式的開發。目標先定的單純-就是用將現行的C#語法置換成F#。

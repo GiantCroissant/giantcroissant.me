@@ -1,0 +1,27 @@
+---
+title: 用Loggly來幫助顯示Log
+date: 2017-05-11
+tags:
+  - unity
+  - plugin
+  - unirx
+  - loggly
+---
+
+專案在Unity Editor開發時，可以隨時看到Log，幫助開發。然而，當它被建置成執行檔後，若是不特地寫一個In Game Console之類的機制，是很難看到Log。在Asset Store上是有一些已經可現成使用的外掛，但多數需付費才能取得。除此之外，若是有需要保留Log的記錄，也不是多數外掛有支援的。
+
+隨著網路服務越來越普及，在這個年代善加利用網路服務，是可以有效幫助開發的。而對於保存Log的網路服務-Loggly，也已經上線多年了，不但穩定且使用人數很廣，有一定的品質，再加上有免費的Quota，的確是可以幫助專案開發的。
+
+在Google上稍做搜尋後，就可以看到Loggly如何套用在Unity裡的文章。簡單來說，就是要先註冊一個帳號，待帳號註冊完成後，直接套用[這篇文件](https://www.loggly.com/docs/unity-3d/)的步驟，將所需的程式碼寫入。這裡特別注意的是要將TOKEN替換成自己生成的那一長串的Id，且logs-01.loggly.com保留，不要換成自己的子網域。
+
+遵循這幾個步驟後，就可以順利的將一個Hello World訊息丟到Loggly了。
+
+不過，用Coroutine的寫法可以藉由UniRx的使用做一些改寫。參照UniRx內含的第四個範例再參考[這篇文章](http://belhb.hateblo.jp/entry/2016/05/02/025713)則可以將Coroutine的寫法完全置換成UniRx的Observable。
+
+完成後的程式碼為
+
+<script src="https://gist.github.com/ApprenticeGC/910459422b77b649cd711706a5e16546.js"></script>
+
+比較麻煩的地方在於這個Token若是被任何人拿到後，都可以隨意的使用，所以這裡看到的Token已讓它成為不能用的狀態。
+
+簡單的結合了UniRx和Loggly，利用免費帳號每天200MB容量進行開發上Log的記錄，但Token的隱密性就變得很重要。還好正式的專案是放在Git Private Repo，風險較低。在測試結合順利完成後，要開始回放到正式的專案裡，以幫助專案Log部份的記錄。

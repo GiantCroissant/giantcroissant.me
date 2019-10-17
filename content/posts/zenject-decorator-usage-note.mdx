@@ -1,0 +1,34 @@
+---
+title: Zenject中修飾場景的使用
+date: 2017-07-09
+tags:
+  - unity
+  - plugin
+  - zenject
+---
+
+撇開相依性注入的概念，將Zenject單純的想成資料綁定的迷你框架來看，它提供的修飾場景（Decorator Scene）讓開發變的相當的完善。從官方的文件可以理解到Decorator Scene可以擴充原有場景的功能，它用的範例是可以額外加入開發時才會用到的輸入，協助開發的進行。
+
+從這個方向去思考，可以看到很多使用的時機，也可以讓程式碼不會這麼複雜。在現有的In-Game Console方案，可以看到不少的外掛都是針對屬性（Attribute）做擴充，雖然於撰寫程式碼時很方便，但它確和遊戲主邏輯的程式碼綁在一起。雖然用個Preprocessor可以讓編譯時不考量進來，又或是可以用C#特有的Partial Class做分類，但始終是被綁定在一起的。
+
+但用Zenject的Decorator Scene，則可以將開發用和遊戲主邏輯部份做一次切分。所有開發時協助用的功能都撰寫在Decorator Scene這裡，而遊戲邏輯則在主線上撰寫，這時利用一個簡單布林值（Bool）就可以決定是否要載入或是不載入Decorator Scene。更棒的是，在專案建置時，可以將所有的Decorator Scene移除，仍可以順利的建置所要的遊戲專案。
+
+這個好處一來是省下一些些的容量，但其實開發用的場景不大，沒有達到資源節省的用處。真正的好處在於如果真的是將開發和主邏輯分的很好，則一但移除了所有的Decorator Scene就表示，開發用的Cheat Code、特殊功能等，隨著Decorator Scene被移除，無論如何也不會出現在遊戲中。可以有效的防止開發用的便利功能不小心外流出去，讓遊戲失去平衡。
+
+它是可經由某些值而決定被載入或是不載入，因此在和其它模組的溝通上用事件傳遞配合Interface是最適合不過了，而一提及事件，就不能不談論到UniRx，簡單來說，在現有的開發中，只要有傳遞事件的需求，用UniRx獨有的事件流來協助，絕對是有極大的便利性。但在近期的嘗試中發現了一些規則，Zenject搭配UniRx時必需要知道這些規則才不會花去太多的時間找尋合不起來的問題。
+
+首先從官方的文件裡知道，Decorator Scene一定要在被修飾的場景之前被載入。而Decorator Scene裡要有SceneDecoratorContext元件存在，並且該元件上的Decorator Contract Name要符合被修飾的場景中的SceneContext元件上的Contract Names裡的其中一欄。這些都是為了要讓Zenject可以進行綁定的基本規則。但加入了UniRx（或是一般的事件）時，生成的時間就變的很重要了。這點相信在文件中有提及，但一般在使用時並不會仔細閱讀這一段，本身也是略過了這一段的文件，用了很多的時間去嘗試才明瞭的。
+
+一般來說，在實現Zenject IInitializable的型別中，會有一個Initialize method這個method會於建構method後呼叫，為了避免在建構時會有異常被丟出來，所以會將多數初始化的功能撰寫在Initialize中。而按照使用UniRx的習慣，事件流都會在此展開必要的操作和註冊動作。但在Zenject的Decorator Scene中，若沒有注意到先後順序則會有接不到事件的窘境。
+
+先不看Decorator Scene，一般的Scene裡若是有Zenject Scene Context，則在場景載入當下，就會先跑實現了Zenject IInitializable型別的建構，接下來就會執行Initialize method，到目前為止都是正常流程，直接接收事件是沒有問題的。
+
+但在Decorator Scene中，規則稍有不同。當Decorator Scene被載入時並不會開始跑建構method，而是內部會先擱住，直到有Scene Context元件的場景被載入時，才會開始執行開始跑建構method。但不要忘了Decorator Scene是要先被載入的，因此若是以為載入完場景也就等於它已經建構好並呼叫了Initialize method，則是大錯特錯的想法。
+
+最好的方式是做雙向的確認，額外的由Decorator Scene知會一般的場景，通知自身已經完成Initialize，並由一般的場景統一滙整所有的Decoratorr Scene後再另行通知。而UniRx的事件流註冊則在這之後是最穩當的，避開了沒有物件註冊的問題。
+
+還有一點特別要注意的是，在一般的Scene Context概念，如果是以模組方式來看，會需要在載入場景檔時以Child的方式進行載入，或是在即將成為Child場景的Scene Context上將Parent Contract Name值填入。如此，於Child場景中，才可以直接拿取Parent中被綁定的型別參考。但在目前的Zenject版本，Decorator Scene沒地方填入Parent Contract，但它確是已經可以拿到Parent裡的綁定型別參考值的。
+
+這就是用了Zenject後痛了好幾次後，終於決定要記錄Zenject使用Decorator Scene上的注意部份。希望日後再使用時，能少花一些時間避開使用上的問題。
+
+Decorator Scene將開發用的程式碼和遊戲邏輯碼確實的分開，雖然使用上有些陷阱，但在了解避開後，可以讓開發架構變得更完整。總括來說，Zenject是個很優秀的外掛，了解並使用Decorator Scene可讓開發更加的輕鬆。

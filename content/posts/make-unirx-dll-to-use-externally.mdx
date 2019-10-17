@@ -1,0 +1,77 @@
+---
+title: 引用UniRx的Dll
+date: 2017-05-10
+tags:
+  - unity
+  - plugin
+  - unirx
+  - dll
+---
+
+UniRx除了提供元始碼可直接放入Plugins目錄下進行引用，也有提供csproj檔，讓開發者可自行建置成Dll後再行引用。多數的情況下，這二種引用的方式並沒有太大的區別，但在很少見的使用者案例中，還是有所區別的。
+
+多數的外掛開發者已意識到Unity開發的生態中，會引用大量的外掛，雖然外掛的根目錄掛哪層並無明文限制，但長久都會直接放到Assets目錄下。由於多數的外掛開發者已達成某種共識，並無不妥。但對於遊戲的開發者來說，其實是有所引響的，當大量的外掛載入到專案後，首先會被衝及到的就是每次修改腳本（Script）後會帶來可觀的編譯時間。
+
+Unity的官方文件早有提及要改善此狀況，最簡單的方式就是將外掛置於Plugins或是Standard Assets下。若外掛已放到這二個目錄其一裡面，則和編譯成Dll後進行引用並沒有太大的差別-都可以有效的降低更動後的編譯時間。而UniRx也做到了，不論是從Asset Store上直接下載，或自行拿取GitHub的程式碼後放入，都遵循了這個規則，若非有特別的狀況，理應就是用預設的方式進行引用。
+
+但，專案的開發永遠都不是這麼一成不變的，隨著時間、經驗和方式都會有所異動。若專案中的某部份邏輯已趨於穩定，又或是有其它的需求，而以Dll的方式開發後滙入。而該部份又恰好有使用到UniRx，則必需要進行UniRx Dll的引用。一但此部份進行引用，則整個專案都不再是以程式碼的方式進行，而是要引用Dll，才不會發生雙份參照值會產生的錯誤。
+
+雖然不是常態，但的確也不是很稀有的使用情境，在這樣的環境下勢必只能夠自行建置UniRx Dll檔。UniRx的開發者所提供的csproj檔算是很完整了，只需要將
+
+- UnityEngine.dll
+- UnityEditor.dll
+- UnityEngine.UI.dll
+
+放入到指定的位置，此位置可從Dlls/UniRx/UniRx.csproj這份檔案裡得知。
+
+```xml
+	<Reference Include="UnityEditor">
+      <HintPath>..\..\Library\UnityAssemblies\UnityEditor.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>..\..\Library\UnityAssemblies\UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>..\..\Library\UnityAssemblies\UnityEngine.UI.dll</HintPath>
+    </Reference>
+```
+
+上二層，也就是和Dlls同層級的地方要有Library目錄，此目錄下要有三個Unity相關的Dll檔。
+
+此後則可用MonoDevelop、Visual Studio (Code)等IDE或是mono cli等指令工具進行建置，而建置出來的檔案UniRx.dll，放到專案的Plugins目錄，可順利的被引用。
+
+若是都這麼的美好，也不用額外花一小篇篇幅來介紹如何建置Dll，畢竟，多數的開發者都有建置Dll的經驗，就算沒有，Google一下，各式語言的文章就立即顯現，這篇文章就不做多餘的贅述。
+
+UniRx Dll的使用一直都不會有任何問題，直到要進行Unity執行檔的建置（Build）-exe檔也好、dmg也好，這時就會發現不論怎麼Build都會彈出錯誤，無法進行。
+
+錯誤都是指向引用了UnityEditor.dll，這點也不難發現，在前述的三個Unity相關的引用檔中，UnityEditor.dll就是其中之一。也就是說，利用所提供的csproj檔，建置出來的Dll檔就是會參考到Editor相關的機制，但在Build成執行檔時，是不被允許的。在沒有太多的文件說明哪些C#的檔案有參照到UnityEditor.dll，只能先移除
+
+```xml
+''     <Reference Include="UnityEngine">
+''       <HintPath>..\..\Library\UnityAssemblies\UnityEngine.dll</HintPath>
+''     </Reference>
+```
+
+後進行編譯，測試哪些檔會出現編譯上的錯誤。像是InspectorDisplayDrawer.cs檔等，都會有錯誤，但直接移掉這些檔案的引用
+
+```xml
+	<Compile Include="..\..\Assets\Plugins\UniRx\Scripts\UnityEngineBridge\InspectorDisplayDrawer.cs">
+      <Link>UnityEngineBridge\InspectorDisplayDrawer.cs</Link>
+    </Compile>
+```
+
+會產生更多的錯誤。在多方的試驗後終於找到了一個有效的改變。將DefineConstants裡面的
+
+```
+UNITY_EDITOR;UNITY_EDITOR_WIN;
+```
+
+這二個定義移除，而後再進行編譯，則會順利的得到Dll檔。此Dll檔案取代原先的Dll檔初步使用並無明顯不同，進行遊戲的Build時也可以順利通過。
+
+也就是說依照所提供的csproj檔仍會有需要進行客製化的調整而得到至少二份Dll。原先會加入參考UnityEditor.dll必定有其原因，在這樣的考量下只好在Editor作業時引用最完整的一份，而之後要Build執行檔時再放入另一份。
+
+開發時，多數情況下只用Editor的Play模式即可，通常需要建置執行檔時，多是連線的遊戲要開多個Client又或是要將執行檔給予他人。所幸目前的開發中並未觸及到連線，只需要在Build執行檔的當下抽換，大致上來說就沒有問題。
+
+但目前會建置給他人使用的執行檔圴是請Unity Cloud Build（UCB）代勞，所以抽換Dll的時機點落在此階段較為方便。
+
+由於專案開發上有從外部引用UniRx的需求，Dll的引用是無法避免的，了解其差異性再配合建置、引用，也還算是方便。但一開始若就有提供二套不同的csporj檔的話就不會再花時間試驗，而另一方面則是若Unity本身可以選擇哪些Dll可被引用哪些Dll不需要被引用，則後續的替換也可以避免。就現階段來看，能成功的在不同的情況下使用UniRx已經是很棒的了。
