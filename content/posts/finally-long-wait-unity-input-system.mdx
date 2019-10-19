@@ -1,0 +1,104 @@
+---
+title: 終於出爐的Input System
+date: 2019-10-19
+tags:
+  - unity
+  - plugin
+  - input-system
+---
+
+Unity下個階段的Input System於2016年左右丟出了意見回饋收集版本後，在Unity Forum裡開設一篇文章不定期的交流目前的進展，但中間又中斷一些時間後，再度展開。直到日前官方發出的[Blog](https://blogs.unity3d.com/2019/10/14/introducing-the-new-input-system/)，才讓眾多的開發者了解到Input System終於到了Production Ready的階段。不過在Unity 2019.3的版本中，還是要用Pacakge Manager裡的Preview選項才能夠載入到專案中。
+
+![](https://lh3.googleusercontent.com/u5SnqI6SXGqprBAAb9nYTI4Ko4XJV_3IXOLnmsIwP1_ydECS3JzaYcKtcT-sBSWGq1J6u4HIvm7GRCmdKvO9PdEREDgKEAwurfGWrQ2KWkqiOu2z6Ioql4FOe2dozmsi_olKYJcVlg=w1575-h900-no)
+
+而Blog裡含著的[影片](https://www.youtube.com/watch?v=hw3Gk5PoZ6A)裡，清楚的說明要如何使用這套Input System，以及它現有的擴充和未來會追加的功能。不過這影片夾帶的資訊量有些多，並不需要徹頭徹尾的觀看後才能開始，實際上，調整後釋出的版本可以很快速的讓開發者幾乎無痛的從原先的Input Manager轉換過來。
+
+## 使用Input System
+
+Package Manger裡順便拿取Simple Demo，按照自己的需求參照Simple Demo後即可得到所要的結果。
+
+![](https://lh3.googleusercontent.com/atuKseLi5jNHHwl-zy2ps3ze0GV_9vcP2qvZma26qu4K0p9zwNyHCh73J9hpEjpFSfvhwpM5y9quEQvRI7-cDc2-IFNaZtdDKauZWIKL-XkesHJYN5WdSc_lMDtaWEgYhCf3dTMGaY9UUofZyYjjqEaDmlARwgAiTYlBN5GeR-eJPnGttgjfxKsaemSz6WpN5T0uwyn9zwn63DQsnQPW_GGgkEfnm9mqEaaiqHFvcc7bibisjQjGrQePflsJbuvARtTP_QF41q1moYCrIDeDwxGKyKoTnrRq8-n491MFEF-ZJL1dUV_f8KMP2EJ-ZpJzNuXufwm0UlkXatme8rs6k4RS3OC8DKOVOJc72rxcFf84HrdHIh5P4ZaPiTI_L8JsdKzVKf3wJEXVX1u6J0WNzLDDp35UgCKSdYC3N5FIXrXoSD1DdKsrKcBZyRJ1Udy9bsHdGxY9D0H4nyz917NKgbbKNCeyYFyDoQ5aOX566I-0vyAMwYJTh529sejfiR-nNsAaPxeLHd30pECU927O6s73dtT5M7yHn4f4NPmUqpRXlrzewPN9qqvpM1fONYsgWIX1_ewmQHeyxq7_YY6FbksD4XPGrB5duAtwmeaxxUP1XLPepQWkCg0-8hJPdtA28WgXD8K3daudBRSH7NKDwJzGsvm6p32c5N9HhhvwImCU65BojAoAvw=w1459-h818-no)
+
+最直接的方式是自行產生出一個Input Control Asset，而在新產出的Asset中，按照分類的方式先產生Action Maps，而後再依照分類中的需求產生Actions。自行依照Simple Demo裡的Control Asset再配合範例引用Kenney的太空美術資源進行了實驗。
+
+一開始做了一個Battle的分類，並於其中放入了二個Action
+
+- Move
+- Fire
+
+且為了要測試，加入了Gamepad的操作和鍵盤的操作，在鍵盤部份，把WASD和方向鍵的操作一起加進來。
+
+![](https://lh3.googleusercontent.com/ExpN0rDh31wdUHv5WFzlEcwGqSKctMYUms1xXi79kEec2PFoG6pwsNiXDZ8AGgdzOYjP_71_XgeVBVgZPf0uQbyh7NHlk73whZD7qKshB50jQsrslSPPyYN7OtRd8q0cNfQlrNJVpA=w1575-h900-no)
+
+到此，其實已差不多完成。但有個最重的一部分是如何引用這份Asset，這點，Unity官方提供了利用Codegen（程式碼生成）的方式，只需要選擇啓動，每一次修改Control Asset於存檔後（可選自動存檔），會立即調整Codegen的程式碼。
+
+生產的程式碼引用上沒有太複雜的地方，程式碼片段展示按鈕類事件接收方式
+
+```cs
+_gameControls.Battle.Fire.performed += context =>
+{
+    // Can fire bullet
+}
+```
+
+以及雙軸向數值拿取方式
+
+```cs
+var moveValue = _gameControls.Battle.Move.ReadValue<Vector2>();
+```
+
+Battle是分類，Fire是Action而performed為其開設的事件，其餘的事件可從Codegen程式碼看到
+
+```cs
+Fire.started += instance.OnFire;
+Fire.performed += instance.OnFire;
+Fire.canceled += instance.OnFire;
+```
+
+而這些事件是被定義在```InputAction.cs```檔案裡
+
+```cs
+public event Action<CallbackContext> started
+{
+    add => m_OnStarted.Append(value);
+    remove => m_OnStarted.Remove(value);
+}
+
+public event Action<CallbackContext> canceled
+{
+    add => m_OnCanceled.Append(value);
+    remove => m_OnCanceled.Remove(value);
+}
+
+public event Action<CallbackContext> performed
+{
+    add => m_OnPerformed.Append(value);
+    remove => m_OnPerformed.Remove(value);
+}
+```
+
+和原有的```Input.GetAxis```和```Input.GetButton```出入不大。
+
+## 用UniRx進行包裝
+
+近年來只要是處理事件的部份，很習慣的就會引用UniRx，它將事件串流的概念，在整理、串接事件時真的是很方便，UniRx的介紹可從網路上不少資料中了解，之前有記錄的文章但丟失不少，日後滙整後會嘗試再做介紹。
+
+而這次的試驗在於要怎麼將Codegen出來的事件進行包成Observable的方式，利用```Observable.FromEvent```，調整一下Type Parameter後即可，程式碼片如下
+
+```cs
+Observable.FromEvent<
+    System.Action<UnityEngine.InputSystem.InputAction.CallbackContext>,
+        UnityEngine.InputSystem.InputAction.CallbackContext>(
+        h => (c) => h.Invoke(c),
+        h => _gameControls.Battle.Fire.performed += h,
+        h => _gameControls.Battle.Fire.performed -= h)
+    .Subscribe(x =>
+    {
+    });
+```
+
+通常來說，利用UniRx的包裝事件只有在註冊和取消註冊時是一次寫下來的，不用擔心註冊後忘了在移除時取消註冊。但在Codegen的協助下，自身就有針對移除時進行取消註冊的撰寫。所以從這個角度上來說，用不用Observable意義不大。但考量到日後有可能會複合鍵的輸入方式、連按的輸入判定的。UniRx的存在仍是有所助益。
+
+這次先針對如何取代傳統的Input Manager快速引用Input System進行記錄，相關的程式碼放置於[unity-sample-2019](https://github.com/ApprenticeGC/unity-sample-2019)中的[input-system-first-look](https://github.com/ApprenticeGC/unity-sample-2019/tree/master/input-system-first-look)。區別一般事件引用的PlayerControl和以UniRx進行包裝的PlayerControlReactive，雖然範例本身很陽春，但足以展示Input System的使用方式。
+
+日後若有需要進行客製化的Layout、Device時會再另行記錄。而和Bolt的接連也應該是會是擇日要進行的。
