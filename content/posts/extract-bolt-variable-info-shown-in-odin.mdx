@@ -1,0 +1,53 @@
+---
+title: Bolt中宣告的變數
+date: 2019-10-27
+tags:
+  - unity
+  - plugin
+  - bolt
+  - oding-inspector
+---
+
+Bolt的變數可藉由Variables元件掛載在物件後由Flow Graph直接引用，不過它和Flow Graph在設計上有些許不同的想法。掛載於物件上的Flow Machine可以有多個，同時間這些Flow Machine裡指向的Flow Graph都可被執行，達成多工的概念。但在物件上的Variables元件，卻會被限制在一個而不是多個。
+
+在一般物件的操作下，可重覆掛載同型別的元件多個，這是Unity的所賦予的，也因此可以掛載多個Flow Machine型別，雖然重覆掛載Variables元件也無不可，也可以進行設定，但在Flow Graph（State Graph中也應該相同）裡只能看到一個Variables的元件，且是從上到下的第一個，其它的都無法出現。
+
+若是利用直接拖曳的方式將Inspector裡另一個Variables元件裡的變數放到Graph裡，在放進來時並不會有任何問題，一但開始執行時，錯誤就會出現，會有InvalidOperationException。現行的設計中，多個Variables放在同一個物件上，並於其上的Flow Graph進行引用時，是不可行的。
+
+不知道是否多個Variables元件的讀取是困難的，故自行利用GetComponents拿取並以Odin Inspector進行顯示，版段程式碼如下
+
+```cs
+var variablesComps = GetComponents<Bolt.Variables>();
+var allVcs =
+    variablesComps.SelectMany(vc =>
+    {
+        var vcs =
+            vc.declarations.Select(d => new VariableContext
+            {
+                name = d.name,
+                typeName = d.value.GetType().ToString()
+            });
+
+        return vcs;
+    });
+
+variableContexts.AddRange(allVcs);
+```
+
+拿取、顯示皆如預期，從這裡可以了解Bolt應該也是可以完成所有掛載在物件上Variables元件拿取的動作，不知是否有其它考量還是只是設計時的使用範例沒有含蓋到。
+
+為何不只用一個，並將所有的變數在其中定義？使用上並無不可，但在實際開發時一長串的變數就算是經過妥善命名規則，仍是很複雜的。比方說在此範例專案，就是以UI當做例子，一個畫面上數值若是全數塞到變數清單中相當的不易理解。寫程式碼時，會利用Serializable概念另行定義分類用型別，利用收納的方式管理上較為簡單。
+
+在現行的Bolt設計架構中，它對於Graph有著很好的分類機制，不論是Super Unit也好、Group分類也好，多Flow Machine也好，都讓管理多個Graph這件事變得輕鬆。回看到變數這，使用起來稍微陽春，有很大的進步空間。
+
+撇開這一直線無法分類的變數定義，利用一個單獨的元件來擺放變數仍是很不錯的想法。若從PlayMaker的角度去看，每個FSM都有其專有的變數定義區，若是要引用不同FSM裡的變數，則要先取得該FSM後，再拿取變數。Bolt額外切出變數元件（NodeCanvas也是這樣設計的），可以讓同一物件上的Graph全部拿取，立意相當好。
+
+會額外花些時間了解是認為在設計UI相關的功能時，時常會額外增加UI變數，若以撰寫程式的方式，每每都要等待只加了一、二個變數後會重新編譯的時間耗損，若是先用Bolt處理這塊，也或許不需要進入到程式撰寫。畢竟UI於中後期的調整幅度會加大，能不花時間編譯是很有助益的。
+
+再者若能活用Bolt處理UI端，在開發手機遊戲時也可以減少重新送審的可能，改動UI端Bolt的部份都可視為資料（在沒有新增/改動其它程式碼的情況下），可於調整後打包成新一份的Asset Bundle，供手機下載即可。
+
+希望Bolt日後的版本能將分類這功能加到變數定義那，在此之前，也只能自行分寫變數到不同的物件上，且一但用這個方法，連同Flow Machine也要進行調整，分散到不同的物件上，才能利用同物件的變數。
+
+這次試驗的另一個重點是拿取定義的變數資料，而這個部份是串連後面製作上的處理，但現階段還是構思階段，只要先確認變數的資料可以被取出即可。
+
+這次花了一點點時間弄了一個還未有太大參考價值的專案，仍先放置於[unity-sample-2019](https://github.com/ApprenticeGC/unity-sample-2019)中的[extract-bolt-variable-info](https://github.com/ApprenticeGC/unity-sample-2019/tree/master/extract-bolt-variable-info)，有關聯到的付費外掛皆已移除。
