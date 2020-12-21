@@ -1,0 +1,172 @@
+---
+title: 再多花一些時間了解如何使用kinD
+date: 2020-09-24
+categories:
+  - microservice-series
+tags:
+  - k8s
+  - microservice
+---
+
+二個星期前差不多是開始IT邦鐵人賽2020沒多久，就決定要將後端以Microservice的架構方式放在k8s裡，但對於GCP裡如何佈署、規劃都還沒有什麼想法時，思考著如果可以先建置在本地端，待了解後再放到GCP裡，就抽空了解這方面的文章，找到了這篇[WSL+Docker: Kubernetes on the Windows Desktop](https://kubernetes.io/blog/2020/05/21/wsl-docker-kubernetes-on-the-windows-desktop/)，這是這幾年來，看到自己完全不懂的主題時可以動手跟著做而且還不會中途就放棄的教學文章，不但淺顯而且步驟都很清楚。花了些時間完成後就覺得自己好像已經知道什麼是kinD了。不過又過了幾個星期，再回看時才發現自己對於kinD的了解也還是只侷限在該篇文章裡有提及的部份。
+
+隨著連線的需求逐漸到一個階段，要將microservice的後端放入到k8s的需求慢慢地浮現出來，又再度要花時間回來了解kinD的使用方式，具體來說應該是k8s的整體概念，如何用kinD在本地端模擬實現。所以今天又再花些時間回看這篇文章，試著更深入的了解。
+
+```yaml
+# kind-3nodes.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker
+```
+
+文章中的這段，是進行三個Node的產生
+
+```sh
+# Create a new cluster with the config file
+kind create cluster --name wslkindmultinodes --config ./kind-3nodes.yaml
+```
+
+```sh
+# Check the services for the whole cluster
+kubectl get all --all-namespaces
+```
+
+利用kubectl去查看，果然已經跑了快20天時間
+
+```sh
+# Check how many nodes it created
+kubectl get nodes
+
+NAME                              STATUS   ROLES    AGE   VERSION
+wslkindmultinodes-control-plane   Ready    master   17d   v1.18.2
+wslkindmultinodes-worker          Ready    <none>   17d   v1.18.2
+wslkindmultinodes-worker2         Ready    <none>   17d   v1.18.2
+```
+
+```sh
+# Check the resources it created based on the new namespace created
+kubectl get all -n kubernetes-dashboard
+
+NAME                                             READY   STATUS    RESTARTS   AGE
+pod/dashboard-metrics-scraper-6b4884c9d5-4hs8t   1/1     Running   5          17d
+pod/kubernetes-dashboard-7d8574ffd9-sn62x        1/1     Running   8          17d
+
+NAME                                TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
+service/dashboard-metrics-scraper   ClusterIP   10.110.244.243   <none>        8000/TCP   17d
+service/kubernetes-dashboard        ClusterIP   10.97.57.220     <none>        443/TCP    17d
+
+NAME                                        READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/dashboard-metrics-scraper   1/1     1            1           17d
+deployment.apps/kubernetes-dashboard        1/1     1            1           17d
+
+NAME                                                   DESIRED   CURRENT   READY   AGE
+replicaset.apps/dashboard-metrics-scraper-6b4884c9d5   1         1         1       17d
+replicaset.apps/kubernetes-dashboard-7d8574ffd9        1         1         1       17d
+```
+
+這次再敲入這些指令後，Browser裡會跑出錯誤
+
+```sh
+# Start a kubectl proxy
+kubectl proxy
+# Enter the URL on your browser: http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/
+```
+
+```
+Error trying to reach service: 'dial tcp 10.244.0.4:8443: connect: connection refused'
+```
+
+```sh
+kubectl --namespace=kube-system port-forward <kubernetes-dashboard-podname> 8443
+
+# Use port fowarding method from https://www.cnblogs.com/jackluo/p/12228289.html
+kubectl --namespace=kubernetes-dashboard port-forward pod/kubernetes-dashboard-7d8574ffd9-sn62x 8443
+```
+依然不行的情況下，只好移除後重新開新，也就是重新產生Cluster。而砍掉後再走一遍相同的流程則又可以利用Token進行登入，底下這二段很重要，是如何生成service account後可以拿取到token進行登入的方法。
+
+```sh
+# Create a new ServiceAccount
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admin-user
+  namespace: kubernetes-dashboard
+EOF
+# Create a ClusterRoleBinding for the ServiceAccount
+kubectl apply -f - <<EOF
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admin-user
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: admin-user
+  namespace: kubernetes-dashboard
+EOF
+```
+
+```sh
+# Get the Token for the ServiceAccount
+kubectl -n kubernetes-dashboard describe secret $(kubectl -n kubernetes-dashboard get secret | grep admin-user | awk '{print $1}')
+# Copy the token and copy it into the Dashboard login and press "Sign in"
+```
+
+雖然完成了一個最簡單的Cluster，也知道可以用dashboard，但接下來要做的應該是要怎麼將microservice放進去。這時對於k8s沒什麼概念的情況下，只能再度回到最基本的教學上，[Learn Kubernetes Basics](https://kubernetes.io/docs/tutorials/kubernetes-basics/)。
+
+1. Create a Kubernetes cluster
+2. Deploy an app
+3. Explore your app
+4. Expose your app publicly
+5. Scale up your app
+6. Update your app
+
+所以目前的進度充其量也只完成了第一步，利用kinD完成本地端的cluster代替方案。不過在這之後的嘗試都一直會卡在external ip這個問題上。還要再花些時間研究，至少要能夠在本地端的client連到server才行。
+
+
+
+
+
+再回看到[kinD的官網](https://kind.sigs.k8s.io/docs/user/quick-start/)
+
+```sh
+kind create cluster
+```
+
+> This will bootstrap a Kubernetes cluster using a pre-built node image
+
+> To specify another image use the --image flag.
+
+接下來要試驗用packer進行包image的動作，先從[Packer Docker Container](https://hub.docker.com/r/hashicorp/packer/)了解如何利用Docker來執行packer，底下是將Docker hub上的指令拿下來，進行小幅度的修改後使用
+
+```sh
+docker run -it \
+    --mount type=bind,source=$PWD/template.json,target=/mnt/template.json \
+    hashicorp/packer:latest build \
+    /mnt/template.json
+
+docker run -it \
+    --mount type=bind,source=$PWD/template.json,target=/mnt/template.json \
+    hashicorp/packer:latest validate \
+    /mnt/template.json
+
+docker run -it \
+    --mount type=bind,source=$PWD,target=/mnt/test_docker_packer \
+    hashicorp/packer:latest build \
+    --var-file /mnt/test_docker_packer/vars.json \
+    /mnt/test_docker_packer/template.json
+
+docker run -it \
+    --mount type=bind,source=$PWD,target=/mnt/test_docker_packer \
+    hashicorp/packer:latest build \
+    /mnt/test_docker_packer/template.json
+```
+
+本來想用Docker Builder，但發現用Docker執行packer時，是無法製作Docker image的。
